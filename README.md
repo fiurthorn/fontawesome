@@ -1,4 +1,5 @@
 # fontawesome
+https://fontawesome.com/icons
 
 # Installation
 `go get -u gitea.com/go-icon/fontawesome`
