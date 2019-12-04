@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"golang.org/x/net/html"
 	"io"
 	"log"
 	"net/http"
@@ -71,25 +72,23 @@ func run() error {
 	fmt.Fprint(&buf, `package fontawesome
 
 import (
+	"fmt"
 	"html/template"
-	"strconv"
-	"strings"
-
-	"golang.org/x/net/html"
 )
 
 // FontAwesome represents an SVG node
 type FontAwesome struct {
-	Node *html.Node
+	xml    string
+	width  int
+	height int
+	style  string
+	id     string
+	class  string
 }
 
 // XML returns the SVG node as an XML string
 func (fa *FontAwesome) XML() string {
-	builder := &strings.Builder{}
-	if err := html.Render(builder, fa.Node); err != nil {
-		return ""
-	}
-	return builder.String()
+	return fmt.Sprintf(fa.xml, fa.width, fa.height, fa.style, fa.id, fa.class)
 }
 
 // HTML returns the SVG node as an HTML template, safe for use in Go templates
@@ -106,27 +105,27 @@ func (fa *FontAwesome) Size(size int) {
 
 // Width sets the width of a FontAwesome icon
 func (fa *FontAwesome) Width(width int) {
-	fa.Node.Attr[`, widthAttrIndex, `].Val = strconv.Itoa(width)
+	fa.width = width
 }
 
 // Height sets the height of a FontAwesome icon
 func (fa *FontAwesome) Height(height int) {
-	fa.Node.Attr[`, heightAttrIndex, `].Val = strconv.Itoa(height)
+	fa.height = height
 }
 
 // Style sets the style of a FontAwesome icon
 func (fa *FontAwesome) Style(style string) {
-	fa.Node.Attr[`, styleAttrIndex, `].Val = style
+	fa.style = style
 }
 
 // Id sets the id of a FontAwesome icon
 func (fa *FontAwesome) Id(id string) {
-	fa.Node.Attr[`, idAttrIndex, `].Val = id
+	fa.id = id
 }
 
 // Class sets the class of a FontAwesome icon
 func (fa *FontAwesome) Class(class string) {
-	fa.Node.Attr[`, classAttrIndex, `].Val = class
+	fa.class = class
 }
 
 // Icon returns the named FontAwesome SVG node.
@@ -169,62 +168,10 @@ func Icon(name string) *FontAwesome {
 }
 
 var faTemplate = template.Must(template.New("fontawesome").Parse(`return &FontAwesome{
-	Node: &html.Node{
-		FirstChild: &html.Node{
-			Type: 3,
-			DataAtom: 0,
-			Data: "path",
-			Namespace: "svg",
-			Attr: []html.Attribute{
-				{
-					Namespace: "",
-					Key: "d",
-					Val: "{{.Path}}",
-				},
-			},
-		},
-		Type: 3,
-		DataAtom: 462339,
-		Data: "svg",
-		Namespace: "svg",
-		Attr: []html.Attribute{
-			{
-				Namespace: "",
-				Key: "xmlns",
-				Val: "http://www.w3.org/2000/svg",
-			},
-			{
-				Namespace: "",
-				Key: "viewbox",
-				Val: "{{.VB0}} {{.VB1}} {{.VB2}} {{.VB3}}",
-			},
-			{
-				Namespace: "",
-				Key: "width",
-				Val: "16",
-			},
-			{
-				Namespace: "",
-				Key: "height",
-				Val: "16",
-			},
-			{
-				Namespace: "",
-				Key: "style",
-				Val: "display: inline-block; vertical-align: text-top; fill: currentColor;",
-			},
-			{
-				Namespace: "",
-				Key: "id",
-				Val: "",
-			},
-			{
-				Namespace: "",
-				Key: "class",
-				Val: "",
-			},
-		},
-	},
+	xml: ` + "`" + `{{.xml}}` + "`" + `,
+	width: 16,
+	height: 16,
+	style: "display: inline-block; vertical-align: text-top; fill: currentColor;",
 }
 `))
 
@@ -234,8 +181,7 @@ type icon struct {
 }
 
 type style struct {
-	ViewBox []string `json:"viewBox"`
-	Path    string   `json:"path"`
+	Raw string `json:"raw"`
 }
 
 func generateAndWriteFontAwesome(w io.Writer, icons map[string]icon, name string) {
@@ -245,15 +191,28 @@ func generateAndWriteFontAwesome(w io.Writer, icons map[string]icon, name string
 		fmt.Fprintf(w, "// %s returns the %q FontAwesome icon.\n", kebab(name)+strings.Title(style), name+"-"+style)
 		fmt.Fprintf(w, "func %s() *FontAwesome {\n", kebab(name)+strings.Title(style))
 		st := ico.SVG[style]
-		if strings.HasPrefix(st.Path, `<path fill-rule="evenodd" `) {
-			st.Path = `<path ` + st.Path[len(`<path fill-rule="evenodd" `):]
+		page, err := html.Parse(bytes.NewBufferString(st.Raw))
+		if err != nil {
+			fmt.Println(err)
+			return
 		}
+		node := page.FirstChild.LastChild.FirstChild
+		node.Attr = append(node.Attr,
+			html.Attribute{Key: "width", Val: "%d"},
+			html.Attribute{Key: "height", Val: "%d"},
+			html.Attribute{Key: "style", Val: "%s"},
+			html.Attribute{Key: "id", Val: "%s"},
+			html.Attribute{Key: "class", Val: "%s"},
+		)
+
+		xml := &strings.Builder{}
+		if err := html.Render(xml, node); err != nil {
+			fmt.Println(err)
+			return
+		}
+
 		faTemplate.Execute(w, map[string]interface{}{
-			"Path": st.Path,
-			"VB0":  st.ViewBox[0],
-			"VB1":  st.ViewBox[1],
-			"VB2":  st.ViewBox[2],
-			"VB3":  st.ViewBox[3],
+			"xml": xml.String(),
 		})
 		fmt.Fprintln(w, "}")
 	}
