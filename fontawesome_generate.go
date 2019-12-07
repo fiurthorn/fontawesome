@@ -76,6 +76,13 @@ import (
 	"html/template"
 )
 
+// Icons is a list of all FontAwesome icons
+var Icons = []string{"`)
+
+	fmt.Fprintf(&buf, strings.Join(names, `", "`))
+
+	fmt.Fprintf(&buf, `"}
+
 // FontAwesome represents an SVG node
 type FontAwesome struct {
 	xml    string
