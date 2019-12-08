@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 	"io"
 	"log"
 	"net/http"
@@ -211,6 +212,17 @@ func generateAndWriteFontAwesome(w io.Writer, icons map[string]icon, name string
 			html.Attribute{Key: "id", Val: "%s"},
 			html.Attribute{Key: "class", Val: "%s"},
 		)
+		node.InsertBefore(&html.Node{
+			FirstChild: &html.Node{
+				Type:      html.TextNode,
+				Data:      name,
+				Namespace: "svg",
+			},
+			Type:      html.ElementNode,
+			DataAtom:  atom.Title,
+			Data:      "title",
+			Namespace: "svg",
+		}, node.FirstChild)
 
 		xml := &strings.Builder{}
 		if err := html.Render(xml, node); err != nil {
