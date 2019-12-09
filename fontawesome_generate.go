@@ -80,7 +80,15 @@ import (
 // Icons is a list of all FontAwesome icons
 var Icons = []string{"`)
 
-	fmt.Fprintf(&buf, strings.Join(names, `", "`))
+	allNames := make([]string, 0)
+	for _, name := range names {
+		ico := icons[name]
+		for _, style := range ico.Styles {
+			allNames = append(allNames, fmt.Sprintf("%s-%s", name, style))
+		}
+	}
+
+	fmt.Fprintf(&buf, strings.Join(allNames, `", "`))
 
 	fmt.Fprintf(&buf, `"}
 
